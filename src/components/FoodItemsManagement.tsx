@@ -168,7 +168,19 @@ export const FoodItemsManagement = () => {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's a foreign key constraint error
+        if (error.code === '23503') {
+          toast({
+            title: "Cannot Delete Item",
+            description: "This item has been used in previous bills and cannot be deleted. You can mark it as unavailable instead.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw error;
+      }
+      
       toast({
         title: "Success",
         description: "Food item deleted successfully",
