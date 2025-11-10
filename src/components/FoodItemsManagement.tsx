@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Search, Filter } from "lucide-react";
@@ -35,6 +36,8 @@ export const FoodItemsManagement = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -159,14 +162,14 @@ export const FoodItemsManagement = () => {
     setDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this food item?')) return;
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
 
     try {
       const { error } = await supabase
         .from('food_items')
         .delete()
-        .eq('id', id);
+        .eq('id', itemToDelete);
 
       if (error) {
         // Check if it's a foreign key constraint error
@@ -176,6 +179,8 @@ export const FoodItemsManagement = () => {
             description: "This item has been used in previous bills and cannot be deleted. You can mark it as unavailable instead.",
             variant: "destructive",
           });
+          setDeleteDialogOpen(false);
+          setItemToDelete(null);
           return;
         }
         throw error;
@@ -185,6 +190,8 @@ export const FoodItemsManagement = () => {
         title: "Success",
         description: "Food item deleted successfully",
       });
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
       loadData();
     } catch (error) {
       console.error('Error deleting food item:', error);
@@ -193,7 +200,14 @@ export const FoodItemsManagement = () => {
         description: "Failed to delete food item",
         variant: "destructive",
       });
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
     }
+  };
+
+  const handleDeleteClick = (id: string) => {
+    setItemToDelete(id);
+    setDeleteDialogOpen(true);
   };
 
   const resetForm = () => {
@@ -402,7 +416,7 @@ export const FoodItemsManagement = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDelete(item.id)}
+                          onClick={() => handleDeleteClick(item.id)}
                           className="text-red-600 hover:text-red-700"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -416,6 +430,32 @@ export const FoodItemsManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the food item from your menu.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteDialogOpen(false);
+              setItemToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
