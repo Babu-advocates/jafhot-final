@@ -1,0 +1,181 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Restaurant Management System Design System */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Restaurant Theme Colors */
+    --restaurant-blue: 217 91% 60%;
+    --restaurant-blue-hover: 217 91% 55%;
+    --restaurant-red: 0 84% 60%;
+    --restaurant-red-hover: 0 84% 55%;
+    --restaurant-cream: 47 100% 97%;
+    --restaurant-gray: 220 9% 46%;
+    --restaurant-gray-light: 220 14% 96%;
+    
+    /* New Elegant Theme Colors */
+    --restaurant-dark-navy: 222 47% 11%;
+    --restaurant-warm-gray: 220 13% 18%;
+    --restaurant-accent-orange: 25 95% 60%;
+    --restaurant-accent-orange-hover: 25 95% 55%;
+    --restaurant-warm-bg: 47 86% 97%;
+    --restaurant-light-cream: 47 100% 99%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border font-poppins;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  /* Login Form Styles */
+  .login-form {
+    @apply animate-fade-in;
+  }
+  
+  .login-form.fade-out {
+    @apply animate-fade-out;
+  }
+
+  /* Tab Toggle Styles */
+  .tab-indicator {
+    @apply absolute top-1 left-1 h-8 bg-restaurant-blue rounded-md transition-transform duration-300 ease-out;
+  }
+
+  .tab-indicator.kitchen-manager {
+    @apply bg-restaurant-red;
+  }
+
+  /* Input Field Styles */
+  .restaurant-input {
+    @apply w-full px-4 py-3 rounded-xl border border-restaurant-gray-light bg-white 
+           focus:outline-none focus:ring-2 focus:ring-restaurant-blue/20 focus:border-restaurant-blue
+           transition-colors duration-200 placeholder:text-restaurant-gray;
+  }
+
+  .restaurant-input.kitchen-manager {
+    @apply focus:ring-restaurant-red/20 focus:border-restaurant-red;
+  }
+
+  /* Button Styles */
+  .restaurant-btn-primary {
+    @apply w-full bg-restaurant-blue text-white py-3 px-6 rounded-xl font-medium
+           hover:bg-restaurant-blue-hover transform hover:scale-[1.02] active:scale-[0.98]
+           transition-all duration-200 shadow-lg hover:shadow-xl;
+  }
+
+  .restaurant-btn-primary.kitchen-manager {
+    @apply bg-restaurant-red hover:bg-restaurant-red-hover;
+  }
+
+  .restaurant-btn-tab {
+    @apply flex-1 py-2 px-4 rounded-md text-sm font-medium text-restaurant-gray
+           hover:text-restaurant-blue transition-colors duration-200 relative z-10;
+  }
+
+  .restaurant-btn-tab.kitchen-manager {
+    @apply hover:text-restaurant-red;
+  }
+
+  .restaurant-btn-tab.active {
+    @apply text-white;
+  }
+
+  /* Card Styles */
+  .login-card {
+    @apply bg-white rounded-2xl shadow-2xl shadow-black/10 p-8 w-full max-w-md
+           backdrop-blur-sm border border-white/20;
+  }
+
+  /* Demo Box Styles */
+  .demo-box {
+    @apply bg-restaurant-gray-light rounded-xl p-4 border border-restaurant-gray/10;
+  }
+}
+
+/* Custom Gradient Background */
+.restaurant-gradient {
+  background: linear-gradient(135deg, hsl(var(--restaurant-cream)) 0%, #ffffff 100%);
+}
+
+/* Chef Animation */
+.chef-bounce {
+  animation: bounce-gentle 3s ease-in-out infinite;
+}
