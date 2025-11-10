@@ -235,6 +235,31 @@ export const FoodItemsManagement = () => {
     }
   };
 
+  const toggleAvailability = async (itemId: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'available' ? 'unavailable' : 'available';
+      const { error } = await supabase
+        .from('food_items')
+        .update({ status: newStatus })
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Status Updated',
+        description: `Item marked as ${newStatus}`,
+      });
+      loadData();
+    } catch (error) {
+      console.error('Error toggling availability:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update item status',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const resetForm = () => {
     setEditingItem(null);
     setFormData({
@@ -438,6 +463,16 @@ export const FoodItemsManagement = () => {
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
+                        {item.status === 'unavailable' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => toggleAvailability(item.id, item.status)}
+                            className="text-green-600 hover:text-green-700"
+                          >
+                            Make Available
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
