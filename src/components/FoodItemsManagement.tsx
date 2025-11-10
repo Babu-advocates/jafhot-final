@@ -37,6 +37,7 @@ export const FoodItemsManagement = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [fkDialogOpen, setFkDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -173,14 +174,10 @@ export const FoodItemsManagement = () => {
 
       if (error) {
         // Check if it's a foreign key constraint error
-        if (error.code === '23503') {
-          toast({
-            title: "Cannot Delete Item",
-            description: "This item has been used in previous bills and cannot be deleted. You can mark it as unavailable instead.",
-            variant: "destructive",
-          });
+        if ((error as any).code === '23503') {
+          // Show fallback dialog to mark as unavailable
           setDeleteDialogOpen(false);
-          setItemToDelete(null);
+          setFkDialogOpen(true);
           return;
         }
         throw error;
@@ -208,6 +205,34 @@ export const FoodItemsManagement = () => {
   const handleDeleteClick = (id: string) => {
     setItemToDelete(id);
     setDeleteDialogOpen(true);
+  };
+
+  const markUnavailable = async () => {
+    if (!itemToDelete) return;
+    try {
+      const { error } = await supabase
+        .from('food_items')
+        .update({ status: 'unavailable' })
+        .eq('id', itemToDelete);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Marked as Unavailable',
+        description: 'The item is now hidden from new orders.',
+      });
+    } catch (error) {
+      console.error('Error marking item unavailable:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to mark item as unavailable',
+        variant: 'destructive',
+      });
+    } finally {
+      setFkDialogOpen(false);
+      setItemToDelete(null);
+      loadData();
+    }
   };
 
   const resetForm = () => {
@@ -452,6 +477,29 @@ export const FoodItemsManagement = () => {
               className="bg-red-600 hover:bg-red-700"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* FK Fallback Dialog */}
+      <AlertDialog open={fkDialogOpen} onOpenChange={setFkDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Item cannot be deleted</AlertDialogTitle>
+            <AlertDialogDescription>
+              This item has been used in previous bills and cannot be removed. You can mark it as unavailable so it no longer appears for new orders.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setFkDialogOpen(false);
+              setItemToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={markUnavailable}>
+              Mark as unavailable
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
