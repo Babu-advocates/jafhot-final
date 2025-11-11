@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,66 +6,56 @@ import type { UserRole } from "@/hooks/useAuth";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-
 interface DashboardContentProps {
   userRole: UserRole;
 }
-
-export const DashboardContent = ({ userRole }: DashboardContentProps) => {
+export const DashboardContent = ({
+  userRole
+}: DashboardContentProps) => {
   if (userRole === 'biller') {
     return <BillerDashboard />;
   }
-  
   return <KitchenDashboard />;
 };
-
 const BillerDashboard = () => {
-  const { stats: dashboardStats, loading } = useDashboardData();
-  
-  const stats = [
-    {
-      title: "Today's Sales",
-      value: loading ? "Loading..." : `₹${dashboardStats.todaySales.toLocaleString('en-IN')}`,
-      icon: DollarSign,
-      color: "text-green-600"
-    },
-    {
-      title: "Weekly Sales",
-      value: loading ? "Loading..." : `₹${dashboardStats.weeklySales.toLocaleString('en-IN')}`,
-      icon: DollarSign,
-      color: "text-green-600"
-    },
-    {
-      title: "Monthly Sales",
-      value: loading ? "Loading..." : `₹${dashboardStats.monthlySales.toLocaleString('en-IN')}`,
-      icon: DollarSign,
-      color: "text-green-600"
-    },
-    {
-      title: "Today's Orders",
-      value: loading ? "Loading..." : dashboardStats.todayOrders.toString(),
-      icon: ShoppingCart,
-      color: "text-restaurant-blue"
-    },
-    {
-      title: "Weekly Orders",
-      value: loading ? "Loading..." : dashboardStats.weeklyOrders.toString(),
-      icon: ShoppingCart,
-      color: "text-restaurant-blue"
-    },
-    {
-      title: "Monthly Orders",
-      value: loading ? "Loading..." : dashboardStats.monthlyOrders.toString(),
-      icon: ShoppingCart,
-      color: "text-restaurant-blue"
-    }
-  ];
-
-  return (
-    <div className="space-y-6">
+  const {
+    stats: dashboardStats,
+    loading
+  } = useDashboardData();
+  const stats = [{
+    title: "Today's Sales",
+    value: loading ? "Loading..." : `₹${dashboardStats.todaySales.toLocaleString('en-IN')}`,
+    icon: DollarSign,
+    color: "text-green-600"
+  }, {
+    title: "Weekly Sales",
+    value: loading ? "Loading..." : `₹${dashboardStats.weeklySales.toLocaleString('en-IN')}`,
+    icon: DollarSign,
+    color: "text-green-600"
+  }, {
+    title: "Monthly Sales",
+    value: loading ? "Loading..." : `₹${dashboardStats.monthlySales.toLocaleString('en-IN')}`,
+    icon: DollarSign,
+    color: "text-green-600"
+  }, {
+    title: "Today's Orders",
+    value: loading ? "Loading..." : dashboardStats.todayOrders.toString(),
+    icon: ShoppingCart,
+    color: "text-restaurant-blue"
+  }, {
+    title: "Weekly Orders",
+    value: loading ? "Loading..." : dashboardStats.weeklyOrders.toString(),
+    icon: ShoppingCart,
+    color: "text-restaurant-blue"
+  }, {
+    title: "Monthly Orders",
+    value: loading ? "Loading..." : dashboardStats.monthlyOrders.toString(),
+    icon: ShoppingCart,
+    color: "text-restaurant-blue"
+  }];
+  return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {stats.map((stat, index) => (
-          <Card key={index} className="hover:shadow-lg transition-shadow duration-200">
+        {stats.map((stat, index) => <Card key={index} className="hover:shadow-lg transition-shadow duration-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">
                 {stat.title}
@@ -76,8 +65,7 @@ const BillerDashboard = () => {
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
             </CardContent>
-          </Card>
-        ))}
+          </Card>)}
       </div>
 
       <Card>
@@ -92,7 +80,7 @@ const BillerDashboard = () => {
             </button>
             <button className="p-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
               <Users className="w-6 h-6 mx-auto mb-2" />
-              <span className="text-sm font-medium">Add Customer</span>
+              <span className="text-sm font-medium">Draft Customer</span>
             </button>
             <button className="p-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
               <BarChart3 className="w-6 h-6 mx-auto mb-2" />
@@ -105,41 +93,30 @@ const BillerDashboard = () => {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>;
 };
-
 const KitchenDashboard = () => {
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     fetchActiveOrders();
-    
-    // Set up real-time subscription for active orders
-    const channel = supabase
-      .channel('active-orders')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bills'
-        },
-        () => fetchActiveOrders()
-      )
-      .subscribe();
 
+    // Set up real-time subscription for active orders
+    const channel = supabase.channel('active-orders').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'bills'
+    }, () => fetchActiveOrders()).subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
-
   const fetchActiveOrders = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bills')
-        .select(`
+      const {
+        data,
+        error
+      } = await supabase.from('bills').select(`
           *,
           bill_items (
             id,
@@ -149,10 +126,9 @@ const KitchenDashboard = () => {
             quantity,
             total
           )
-        `)
-        .eq('status', 'active')
-        .order('created_at', { ascending: true });
-
+        `).eq('status', 'active').order('created_at', {
+        ascending: true
+      });
       if (error) throw error;
       setActiveOrders(data || []);
     } catch (error) {
@@ -161,16 +137,14 @@ const KitchenDashboard = () => {
       setLoading(false);
     }
   };
-
   const markOrderComplete = async (orderId: string) => {
     try {
-      const { error } = await supabase
-        .from('bills')
-        .update({ status: 'completed' })
-        .eq('id', orderId);
-
+      const {
+        error
+      } = await supabase.from('bills').update({
+        status: 'completed'
+      }).eq('id', orderId);
       if (error) throw error;
-
       toast({
         title: "Order completed",
         description: "Order has been marked as completed"
@@ -184,56 +158,53 @@ const KitchenDashboard = () => {
       });
     }
   };
-
   const getTimeSinceOrder = (createdAt: string) => {
     const orderTime = new Date(createdAt);
     const now = new Date();
     const diffInMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60));
     return `${diffInMinutes}m`;
   };
-
   const getOrderPriority = (createdAt: string) => {
     const orderTime = new Date(createdAt);
     const now = new Date();
     const diffInMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes > 15) return { priority: 'high', color: 'bg-red-100 text-red-600' };
-    if (diffInMinutes > 10) return { priority: 'medium', color: 'bg-yellow-100 text-yellow-600' };
-    return { priority: 'low', color: 'bg-green-100 text-green-600' };
+    if (diffInMinutes > 15) return {
+      priority: 'high',
+      color: 'bg-red-100 text-red-600'
+    };
+    if (diffInMinutes > 10) return {
+      priority: 'medium',
+      color: 'bg-yellow-100 text-yellow-600'
+    };
+    return {
+      priority: 'low',
+      color: 'bg-green-100 text-green-600'
+    };
   };
-
-  const kitchenStats = [
-    {
-      title: "Active Orders",
-      value: loading ? "..." : activeOrders.length.toString(),
-      icon: Clock,
-      color: "text-orange-600"
-    },
-    {
-      title: "Completed Today",
-      value: "87",
-      icon: CheckCircle,
-      color: "text-green-600"
-    },
-    {
-      title: "Pending Orders",
-      value: loading ? "..." : activeOrders.filter(order => getOrderPriority(order.created_at).priority === 'high').length.toString(),
-      icon: AlertCircle,
-      color: "text-red-600"
-    },
-    {
-      title: "Avg. Prep Time",
-      value: "12m",
-      icon: Clock,
-      color: "text-restaurant-blue"
-    }
-  ];
-
-  return (
-    <div className="space-y-6">
+  const kitchenStats = [{
+    title: "Active Orders",
+    value: loading ? "..." : activeOrders.length.toString(),
+    icon: Clock,
+    color: "text-orange-600"
+  }, {
+    title: "Completed Today",
+    value: "87",
+    icon: CheckCircle,
+    color: "text-green-600"
+  }, {
+    title: "Pending Orders",
+    value: loading ? "..." : activeOrders.filter(order => getOrderPriority(order.created_at).priority === 'high').length.toString(),
+    icon: AlertCircle,
+    color: "text-red-600"
+  }, {
+    title: "Avg. Prep Time",
+    value: "12m",
+    icon: Clock,
+    color: "text-restaurant-blue"
+  }];
+  return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {kitchenStats.map((stat, index) => (
-          <Card key={index} className="hover:shadow-lg transition-shadow duration-200">
+        {kitchenStats.map((stat, index) => <Card key={index} className="hover:shadow-lg transition-shadow duration-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">
                 {stat.title}
@@ -243,8 +214,7 @@ const KitchenDashboard = () => {
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
             </CardContent>
-          </Card>
-        ))}
+          </Card>)}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -254,15 +224,12 @@ const KitchenDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {loading ? (
-                <p className="text-center text-gray-500">Loading orders...</p>
-              ) : activeOrders.length === 0 ? (
-                <p className="text-center text-gray-500">No active orders</p>
-              ) : (
-                activeOrders.map((order) => {
-                  const { priority, color } = getOrderPriority(order.created_at);
-                  return (
-                    <div key={order.id} className="flex items-center justify-between p-3 bg-restaurant-gray-light rounded-lg">
+              {loading ? <p className="text-center text-gray-500">Loading orders...</p> : activeOrders.length === 0 ? <p className="text-center text-gray-500">No active orders</p> : activeOrders.map(order => {
+              const {
+                priority,
+                color
+              } = getOrderPriority(order.created_at);
+              return <div key={order.id} className="flex items-center justify-between p-3 bg-restaurant-gray-light rounded-lg">
                       <div className="flex-1">
                         <p className="font-medium text-gray-900">
                           Order #{order.mobile_last_digit}
@@ -280,18 +247,12 @@ const KitchenDashboard = () => {
                         <span className={`text-xs px-2 py-1 rounded ${color}`}>
                           {priority}
                         </span>
-                        <Button
-                          size="sm"
-                          onClick={() => markOrderComplete(order.id)}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
+                        <Button size="sm" onClick={() => markOrderComplete(order.id)} className="bg-green-600 hover:bg-green-700 text-white">
                           Complete
                         </Button>
                       </div>
-                    </div>
-                  );
-                })
-              )}
+                    </div>;
+            })}
             </div>
           </CardContent>
         </Card>
@@ -315,21 +276,13 @@ const KitchenDashboard = () => {
                 <span className="font-bold text-green-600">94%</span>
               </div>
               <div className="mt-4 pt-4 border-t">
-                {activeOrders.length > 0 ? (
-                  <Button 
-                    onClick={() => markOrderComplete(activeOrders[0].id)}
-                    className="w-full p-3 bg-restaurant-blue text-white rounded-lg hover:bg-restaurant-blue-hover transition-colors"
-                  >
+                {activeOrders.length > 0 ? <Button onClick={() => markOrderComplete(activeOrders[0].id)} className="w-full p-3 bg-restaurant-blue text-white rounded-lg hover:bg-restaurant-blue-hover transition-colors">
                     Mark Next Order Complete
-                  </Button>
-                ) : (
-                  <p className="text-center text-gray-500 py-3">No orders to complete</p>
-                )}
+                  </Button> : <p className="text-center text-gray-500 py-3">No orders to complete</p>}
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
-    </div>
-  );
+    </div>;
 };
