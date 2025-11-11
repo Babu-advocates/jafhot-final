@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart3, DollarSign, ShoppingCart, Users, Clock, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
@@ -18,6 +19,7 @@ export const DashboardContent = ({
   return <KitchenDashboard />;
 };
 const BillerDashboard = () => {
+  const navigate = useNavigate();
   const {
     stats: dashboardStats,
     loading
@@ -74,15 +76,24 @@ const BillerDashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
-            <button className="p-4 bg-restaurant-blue text-white rounded-lg hover:bg-restaurant-blue-hover transition-colors">
+            <button 
+              onClick={() => navigate('/dashboard/billing')}
+              className="p-4 bg-restaurant-blue text-white rounded-lg hover:bg-restaurant-blue-hover transition-colors"
+            >
               <ShoppingCart className="w-6 h-6 mx-auto mb-2" />
               <span className="text-sm font-medium">New Order</span>
             </button>
-            <button className="p-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+            <button 
+              onClick={() => navigate('/dashboard/billing?tab=draft')}
+              className="p-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+            >
               <Users className="w-6 h-6 mx-auto mb-2" />
               <span className="text-sm font-medium">Draft Bills</span>
             </button>
-            <button className="p-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
+            <button 
+              onClick={() => navigate('/dashboard/bill-history')}
+              className="p-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+            >
               <BarChart3 className="w-6 h-6 mx-auto mb-2" />
               <span className="text-sm font-medium">Reports</span>
             </button>
