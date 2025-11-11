@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, DollarSign, ShoppingCart, Users, Clock, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
+import { BarChart3, DollarSign, ShoppingCart, Users, Clock, AlertCircle, TrendingUp } from "lucide-react";
 import type { UserRole } from "@/hooks/useAuth";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { supabase } from "@/integrations/supabase/client";
@@ -186,11 +186,6 @@ const KitchenDashboard = () => {
     icon: Clock,
     color: "text-orange-600"
   }, {
-    title: "Completed Today",
-    value: "87",
-    icon: CheckCircle,
-    color: "text-green-600"
-  }, {
     title: "Pending Orders",
     value: loading ? "..." : activeOrders.filter(order => getOrderPriority(order.created_at).priority === 'high').length.toString(),
     icon: AlertCircle,
@@ -202,7 +197,7 @@ const KitchenDashboard = () => {
     color: "text-restaurant-blue"
   }];
   return <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {kitchenStats.map((stat, index) => <Card key={index} className="hover:shadow-lg transition-shadow duration-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">

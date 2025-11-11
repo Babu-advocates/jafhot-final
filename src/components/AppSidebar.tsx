@@ -7,7 +7,6 @@ import {
   ChefHat, 
   ClipboardList, 
   Timer,
-  Package,
   LogOut
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -41,7 +40,6 @@ const kitchenMenuItems = [
   { title: "Kitchen Dashboard", icon: ChefHat, active: true },
   { title: "Active Orders", icon: Timer },
   { title: "Menu Items", icon: ClipboardList },
-  { title: "Inventory", icon: Package },
 ];
 
 export function AppSidebar({ userRole }: AppSidebarProps) {
