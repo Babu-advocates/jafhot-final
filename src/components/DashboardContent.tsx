@@ -80,55 +80,31 @@ const BillerDashboard = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-gray-900">Recent Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((order) => (
-                <div key={order} className="flex items-center justify-between p-3 bg-restaurant-gray-light rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">Order #{1000 + order}</p>
-                    <p className="text-sm text-gray-600">Table {order + 4}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-gray-900">₹{((25.50 + order * 5) * 83).toFixed(0)}</p>
-                    <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">Completed</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-gray-900">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              <button className="p-4 bg-restaurant-blue text-white rounded-lg hover:bg-restaurant-blue-hover transition-colors">
-                <ShoppingCart className="w-6 h-6 mx-auto mb-2" />
-                <span className="text-sm font-medium">New Order</span>
-              </button>
-              <button className="p-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
-                <Users className="w-6 h-6 mx-auto mb-2" />
-                <span className="text-sm font-medium">Add Customer</span>
-              </button>
-              <button className="p-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
-                <BarChart3 className="w-6 h-6 mx-auto mb-2" />
-                <span className="text-sm font-medium">Reports</span>
-              </button>
-              <button className="p-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
-                <DollarSign className="w-6 h-6 mx-auto mb-2" />
-                <span className="text-sm font-medium">Payments</span>
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-gray-900">Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-3">
+            <button className="p-4 bg-restaurant-blue text-white rounded-lg hover:bg-restaurant-blue-hover transition-colors">
+              <ShoppingCart className="w-6 h-6 mx-auto mb-2" />
+              <span className="text-sm font-medium">New Order</span>
+            </button>
+            <button className="p-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+              <Users className="w-6 h-6 mx-auto mb-2" />
+              <span className="text-sm font-medium">Add Customer</span>
+            </button>
+            <button className="p-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
+              <BarChart3 className="w-6 h-6 mx-auto mb-2" />
+              <span className="text-sm font-medium">Reports</span>
+            </button>
+            <button className="p-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
+              <DollarSign className="w-6 h-6 mx-auto mb-2" />
+              <span className="text-sm font-medium">Payments</span>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
