@@ -80,7 +80,7 @@ const BillerDashboard = () => {
             </button>
             <button className="p-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
               <Users className="w-6 h-6 mx-auto mb-2" />
-              <span className="text-sm font-medium">Draft Customer</span>
+              <span className="text-sm font-medium">Draft Bills</span>
             </button>
             <button className="p-4 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
               <BarChart3 className="w-6 h-6 mx-auto mb-2" />
