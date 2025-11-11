@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import type { UserRole } from "@/hooks/useAuth";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { playNotificationSound } from "@/utils/notificationSound";
 interface DashboardContentProps {
   userRole: UserRole;
 }
@@ -97,6 +98,7 @@ const BillerDashboard = () => {
 const KitchenDashboard = () => {
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const previousOrderCountRef = useRef<number>(0);
   useEffect(() => {
     fetchActiveOrders();
 
@@ -105,7 +107,22 @@ const KitchenDashboard = () => {
       event: '*',
       schema: 'public',
       table: 'bills'
-    }, () => fetchActiveOrders()).subscribe();
+    }, (payload) => {
+      console.log('Real-time update received:', payload);
+      
+      // Play notification sound only for INSERT events (new orders)
+      if (payload.eventType === 'INSERT' && payload.new?.status === 'active') {
+        console.log('New active order detected, playing notification sound');
+        playNotificationSound();
+        toast({
+          title: "New Order Received!",
+          description: `Order #${payload.new.mobile_last_digit || 'N/A'}`,
+        });
+      }
+      
+      fetchActiveOrders();
+    }).subscribe();
+    
     return () => {
       supabase.removeChannel(channel);
     };
