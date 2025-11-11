@@ -158,12 +158,12 @@ const KitchenDashboard = () => {
       const {
         error
       } = await supabase.from('bills').update({
-        status: 'completed'
+        status: 'draft'
       }).eq('id', orderId);
       if (error) throw error;
       toast({
         title: "Order completed",
-        description: "Order has been marked as completed"
+        description: "Order sent to biller as draft"
       });
     } catch (error) {
       console.error('Error completing order:', error);
