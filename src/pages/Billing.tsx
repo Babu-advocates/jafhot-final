@@ -643,43 +643,16 @@ const NewBilling = () => {
     if (!viewingDraft || !selectedPaymentMode) return;
 
     try {
-      // Update the draft in database
+      // Update the draft to completed status
       const { error: billError } = await supabase
         .from('bills')
         .update({
-          customer_name: viewingDraft.customer_name || null,
-          mobile_last_digit: viewingDraft.mobile_last_digit,
-          total: viewingDraft.total,
           status: 'completed',
           payment_mode: selectedPaymentMode
         })
         .eq('id', viewingDraft.id);
 
       if (billError) throw billError;
-
-      // Delete existing bill items
-      await supabase
-        .from('bill_items')
-        .delete()
-        .eq('bill_id', viewingDraft.id);
-
-      // Insert updated bill items
-      if (viewingDraft.bill_items.length > 0) {
-        const { error: itemsError } = await supabase
-          .from('bill_items')
-          .insert(
-            viewingDraft.bill_items.map(item => ({
-              bill_id: viewingDraft.id,
-              food_item_id: item.food_item_id,
-              food_item_name: item.food_item_name,
-              price: item.price,
-              quantity: item.quantity,
-              total: item.total,
-            }))
-          );
-
-        if (itemsError) throw itemsError;
-      }
 
       // Print the bill with amounts and payment mode
       printBillUtil({
