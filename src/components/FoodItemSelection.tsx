@@ -101,21 +101,6 @@ export function FoodItemSelection({ isOpen, onClose, onAddItem }: FoodItemSelect
     setIsManualQuantity(false);
   };
 
-  const handleQuickAddItem = (item: FoodItem) => {
-    const itemWithQuantity: SelectedItem = {
-      ...item,
-      quantity: 1,
-      total: item.price * 1
-    };
-
-    onAddItem(itemWithQuantity);
-    
-    toast({
-      title: "Item added",
-      description: `${item.name} added to order`
-    });
-  };
-
   const handleAddItem = () => {
     if (!selectedItem) return;
 
@@ -176,59 +161,9 @@ export function FoodItemSelection({ isOpen, onClose, onAddItem }: FoodItemSelect
             </Select>
           </div>
 
-          {/* Quick Add - Searchable List */}
+          {/* Item Selection */}
           <div>
-            <label className="text-sm font-medium mb-2 block">
-              {searchTerm || selectedCategory !== "all" ? "Search Results (Click to add)" : "Available Items (Click to add)"}
-            </label>
-            <div className="border rounded-md max-h-[280px] overflow-y-auto">
-              {loading ? (
-                <div className="p-4 text-center text-muted-foreground">Loading items...</div>
-              ) : filteredItems.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">
-                  No items found
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {filteredItems.map(item => (
-                    <div
-                      key={item.id}
-                      onClick={() => handleQuickAddItem(item)}
-                      className="p-3 hover:bg-accent cursor-pointer transition-colors group"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="font-medium group-hover:text-primary transition-colors">
-                            {item.name}
-                          </div>
-                          {item.description && (
-                            <div className="text-sm text-muted-foreground mt-1">
-                              {item.description}
-                            </div>
-                          )}
-                          {item.food_categories && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              Category: {item.food_categories.name}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 ml-4">
-                          <span className="font-semibold text-primary">
-                            ₹{item.price}
-                          </span>
-                          <Plus className="w-5 h-5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Item Selection with Custom Quantity */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Or select item for custom quantity</label>
+            <label className="text-sm font-medium mb-2 block">Select Food Item</label>
             <Select value={selectedItem?.id || ""} onValueChange={(value) => {
               const item = foodItems.find(item => item.id === value);
               if (item) handleItemSelect(item);
