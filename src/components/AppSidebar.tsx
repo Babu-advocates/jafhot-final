@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { PasswordProtectionModal } from "@/components/PasswordProtectionModal";
 
 import {
   Sidebar,
@@ -47,6 +48,7 @@ export function AppSidebar({ userRole }: AppSidebarProps) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const [activeItem, setActiveItem] = useState(0);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   const menuItems = userRole === 'biller' ? billerMenuItems : kitchenMenuItems;
   const roleTitle = userRole === 'biller' ? 'Biller Panel' : 'Kitchen Panel';
@@ -66,7 +68,8 @@ export function AppSidebar({ userRole }: AppSidebarProps) {
     } else if (title === 'Billing') {
       navigate('/dashboard/billing');
     } else if (title === 'Bill History') {
-      navigate('/dashboard/bill-history');
+      // Show password modal instead of direct navigation
+      setShowPasswordModal(true);
     } else if (title === 'Active Orders') {
       navigate('/dashboard/active-orders');
     } else {
@@ -141,6 +144,11 @@ export function AppSidebar({ userRole }: AppSidebarProps) {
           </SidebarMenuButton>
         </div>
       </SidebarContent>
+      
+      <PasswordProtectionModal 
+        open={showPasswordModal} 
+        onClose={() => setShowPasswordModal(false)} 
+      />
     </Sidebar>
   );
 }
