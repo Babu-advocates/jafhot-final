@@ -161,38 +161,51 @@ export function FoodItemSelection({ isOpen, onClose, onAddItem }: FoodItemSelect
             </Select>
           </div>
 
-          {/* Item Selection */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Select Food Item</label>
-            <Select value={selectedItem?.id || ""} onValueChange={(value) => {
-              const item = foodItems.find(item => item.id === value);
-              if (item) handleItemSelect(item);
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a food item">
-                  {selectedItem && (
-                    <span className="flex items-center gap-2">
-                      {selectedItem.name}
-                      <span className="text-green-600 font-medium">₹{selectedItem.price}</span>
-                    </span>
-                  )}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {loading ? (
-                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                ) : (
-                  filteredItems.map(item => (
-                    <SelectItem key={item.id} value={item.id}>
-                      <div className="flex items-center justify-between w-full">
-                        <span>{item.name}</span>
-                        <span className="text-green-600 font-medium ml-4">₹{item.price}</span>
+          {/* Food Items Grid */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Available Items</label>
+            <div className="max-h-64 overflow-y-auto border rounded-lg p-2 bg-background">
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading items...</div>
+              ) : filteredItems.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {searchTerm || selectedCategory !== "all" 
+                    ? "No items found matching your search"
+                    : "No items available"}
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  {filteredItems.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleItemSelect(item)}
+                      className={`w-full text-left p-3 rounded-md border transition-colors ${
+                        selectedItem?.id === item.id
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-card hover:bg-accent border-border'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium">{item.name}</div>
+                          {item.food_categories && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {item.food_categories.name}
+                            </div>
+                          )}
+                        </div>
+                        <div className={`font-semibold ml-4 ${
+                          selectedItem?.id === item.id ? 'text-primary-foreground' : 'text-primary'
+                        }`}>
+                          ₹{item.price}
+                        </div>
                       </div>
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Quantity */}
