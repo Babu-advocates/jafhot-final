@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Search, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { cacheUtils, CACHE_KEYS } from "@/utils/cacheUtils";
 
 interface FoodItem {
   id: string;
@@ -58,29 +59,40 @@ export const FoodItemsManagement = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      
-      // Load categories
-      const { data: categoriesData, error: categoriesError } = await supabase
-        .from('food_categories')
-        .select('id, name')
-        .order('name');
 
-      if (categoriesError) throw categoriesError;
-      setCategories(categoriesData || []);
+      // Load categories (try cache first)
+      let categoriesData = cacheUtils.get<Category[]>(CACHE_KEYS.CATEGORIES);
+      if (!categoriesData) {
+        const { data, error } = await supabase
+          .from('food_categories')
+          .select('id, name')
+          .order('name');
 
-      // Load food items with category names
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('food_items')
-        .select(`
-          *,
-          food_categories (
-            name
-          )
-        `)
-        .order('created_at', { ascending: false });
+        if (error) throw error;
+        categoriesData = data || [];
+        cacheUtils.set(CACHE_KEYS.CATEGORIES, categoriesData);
+      }
+      setCategories(categoriesData);
 
-      if (itemsError) throw itemsError;
-      setFoodItems(itemsData || []);
+      // Load food items (try cache first)
+      let itemsData = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS);
+      if (!itemsData) {
+        const { data, error } = await supabase
+          .from('food_items')
+          .select(`
+            *,
+            food_categories (
+              name
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        itemsData = data || [];
+        cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, itemsData);
+      }
+      setFoodItems(itemsData);
+
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
@@ -95,7 +107,7 @@ export const FoodItemsManagement = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim() || !formData.price || !formData.category_id) {
       toast({
         title: "Error",
@@ -114,33 +126,60 @@ export const FoodItemsManagement = () => {
         status: formData.status
       };
 
+      let savedItem: FoodItem | null = null;
+
       if (editingItem) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('food_items')
           .update(itemData)
-          .eq('id', editingItem.id);
+          .eq('id', editingItem.id)
+          .select(`
+            *,
+            food_categories (
+              name
+            )
+          `)
+          .single();
 
         if (error) throw error;
+        savedItem = data;
+
         toast({
           title: "Success",
           description: "Food item updated successfully",
         });
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('food_items')
-          .insert(itemData);
+          .insert(itemData)
+          .select(`
+            *,
+            food_categories (
+              name
+            )
+          `)
+          .single();
 
         if (error) throw error;
+        savedItem = data;
+
         toast({
           title: "Success",
           description: "Food item added successfully",
         });
       }
 
+      if (savedItem) {
+        cacheUtils.updateItem(CACHE_KEYS.FOOD_ITEMS, savedItem);
+        // Update local state directly
+        const cached = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS);
+        if (cached) setFoodItems(cached);
+      }
+
       setDialogOpen(false);
       setEditingItem(null);
       resetForm();
-      loadData();
+      // loadData(); // No need to reload, we updated cache and state
     } catch (error) {
       console.error('Error saving food item:', error);
       toast({
@@ -182,14 +221,18 @@ export const FoodItemsManagement = () => {
         }
         throw error;
       }
-      
+
+      // Update Cache and State
+      cacheUtils.removeItem(CACHE_KEYS.FOOD_ITEMS, itemToDelete);
+      setFoodItems(prev => prev.filter(i => i.id !== itemToDelete));
+
       toast({
         title: "Success",
         description: "Food item deleted successfully",
       });
       setDeleteDialogOpen(false);
       setItemToDelete(null);
-      loadData();
+      // loadData(); // No need to reload logic
     } catch (error) {
       console.error('Error deleting food item:', error);
       toast({
@@ -231,7 +274,20 @@ export const FoodItemsManagement = () => {
     } finally {
       setFkDialogOpen(false);
       setItemToDelete(null);
-      loadData();
+
+      // We need to reflect this status change in cache/state
+      if (itemToDelete) {
+        // Manually update cache for efficiency since we know what changed
+        const items = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS);
+        if (items) {
+          const idx = items.findIndex(i => i.id === itemToDelete);
+          if (idx !== -1) {
+            items[idx].status = 'unavailable';
+            cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, items);
+            setFoodItems(items);
+          }
+        }
+      }
     }
   };
 
@@ -249,7 +305,17 @@ export const FoodItemsManagement = () => {
         title: 'Status Updated',
         description: `Item marked as ${newStatus}`,
       });
-      loadData();
+
+      // Update Cache and State
+      const items = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS);
+      if (items) {
+        const idx = items.findIndex(i => i.id === itemId);
+        if (idx !== -1) {
+          items[idx].status = newStatus;
+          cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, items);
+          setFoodItems(items);
+        }
+      }
     } catch (error) {
       console.error('Error toggling availability:', error);
       toast({
@@ -314,8 +380,8 @@ export const FoodItemsManagement = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-900">Category</label>
-                    <Select 
-                      value={formData.category_id} 
+                    <Select
+                      value={formData.category_id}
                       onValueChange={(value) => setFormData({ ...formData, category_id: value })}
                       required
                     >
@@ -344,8 +410,8 @@ export const FoodItemsManagement = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-900">Status</label>
-                    <Select 
-                      value={formData.status} 
+                    <Select
+                      value={formData.status}
                       onValueChange={(value) => setFormData({ ...formData, status: value as "available" | "unavailable" })}
                     >
                       <SelectTrigger>
@@ -370,9 +436,9 @@ export const FoodItemsManagement = () => {
                     <Button type="submit" className="bg-restaurant-blue hover:bg-restaurant-blue-hover">
                       {editingItem ? 'Update' : 'Add'} Item
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => setDialogOpen(false)}
                     >
                       Cancel
@@ -447,7 +513,7 @@ export const FoodItemsManagement = () => {
                       ₹{item.price.toFixed(2)}
                     </TableCell>
                     <TableCell>
-                      <Badge 
+                      <Badge
                         variant={item.status === 'available' ? 'default' : 'secondary'}
                         className={item.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}
                       >
@@ -507,7 +573,7 @@ export const FoodItemsManagement = () => {
             }}>
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmDelete}
               className="bg-red-600 hover:bg-red-700"
             >

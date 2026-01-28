@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { cacheUtils, CACHE_KEYS } from "@/utils/cacheUtils";
 
 interface Category {
   id: string;
@@ -31,13 +32,28 @@ export const CategoryManagement = () => {
   const loadCategories = async () => {
     try {
       setLoading(true);
+
+      // Try local cache first
+      const cachedData = cacheUtils.get<Category[]>(CACHE_KEYS.CATEGORIES);
+      if (cachedData) {
+        setCategories(cachedData);
+        setLoading(false);
+        // We can optionally fetch in background to refresh, but for now we trust cache
+        // If strict freshness is needed, we could fetch here silently
+        return;
+      }
+
       const { data, error } = await supabase
         .from('food_categories')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setCategories(data || []);
+
+      const categoriesData = data || [];
+      setCategories(categoriesData);
+      cacheUtils.set(CACHE_KEYS.CATEGORIES, categoriesData);
+
     } catch (error) {
       console.error('Error loading categories:', error);
       toast({
@@ -52,7 +68,7 @@ export const CategoryManagement = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast({
         title: "Error",
@@ -64,28 +80,44 @@ export const CategoryManagement = () => {
 
     try {
       if (editingCategory) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('food_categories')
           .update({
             name: formData.name,
             description: formData.description || null
           })
-          .eq('id', editingCategory.id);
+          .eq('id', editingCategory.id)
+          .select()
+          .single();
 
         if (error) throw error;
+
+        // Update Cache
+        if (data) {
+          cacheUtils.updateItem(CACHE_KEYS.CATEGORIES, data);
+        }
+
         toast({
           title: "Success",
           description: "Category updated successfully",
         });
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('food_categories')
           .insert({
             name: formData.name,
             description: formData.description || null
-          });
+          })
+          .select()
+          .single();
 
         if (error) throw error;
+
+        // Update Cache
+        if (data) {
+          cacheUtils.updateItem(CACHE_KEYS.CATEGORIES, data);
+        }
+
         toast({
           title: "Success",
           description: "Category added successfully",
@@ -95,7 +127,13 @@ export const CategoryManagement = () => {
       setDialogOpen(false);
       setEditingCategory(null);
       setFormData({ name: "", description: "" });
-      loadCategories();
+      setDialogOpen(false);
+      setEditingCategory(null);
+      setFormData({ name: "", description: "" });
+      // optimized: no need to full reload
+      const cached = cacheUtils.get<Category[]>(CACHE_KEYS.CATEGORIES);
+      if (cached) setCategories(cached);
+      else loadCategories();
     } catch (error) {
       console.error('Error saving category:', error);
       toast({
@@ -125,11 +163,17 @@ export const CategoryManagement = () => {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Update Cache
+      cacheUtils.removeItem(CACHE_KEYS.CATEGORIES, id);
+
       toast({
         title: "Success",
         description: "Category deleted successfully",
       });
-      loadCategories();
+
+      // Update local state directly instead of reloading everything
+      setCategories(prev => prev.filter(c => c.id !== id));
     } catch (error) {
       console.error('Error deleting category:', error);
       toast({
@@ -192,9 +236,9 @@ export const CategoryManagement = () => {
                   <Button type="submit" className="bg-green-500 hover:bg-green-600">
                     {editingCategory ? 'Update' : 'Add'} Category
                   </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => setDialogOpen(false)}
                   >
                     Cancel
