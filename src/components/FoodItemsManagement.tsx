@@ -9,38 +9,31 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Search, Filter } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cacheUtils, CACHE_KEYS } from "@/utils/cacheUtils";
+import {
+  fetchCategories,
+  fetchFoodItems,
+  createFoodItem,
+  updateFoodItem,
+  deleteFoodItem,
+  type FoodItem,
+  type FoodCategory,
+} from "@/lib/api";
 
-interface FoodItem {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  category_id: string;
-  status: string;
-  image_url: string | null;
-  created_at: string;
-  food_categories: {
-    name: string;
-  } | null;
-}
-
-interface Category {
-  id: string;
-  name: string;
+interface LocalFoodItem extends FoodItem {
+  category_name?: string;
 }
 
 export const FoodItemsManagement = () => {
-  const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [foodItems, setFoodItems] = useState<LocalFoodItem[]>([]);
+  const [categories, setCategories] = useState<Pick<FoodCategory, 'id' | 'name'>[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [fkDialogOpen, setFkDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
+  const [editingItem, setEditingItem] = useState<LocalFoodItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [formData, setFormData] = useState({
@@ -56,50 +49,34 @@ export const FoodItemsManagement = () => {
     loadData();
   }, []);
 
+  const enrichItems = (items: FoodItem[], cats: Pick<FoodCategory, 'id' | 'name'>[]): LocalFoodItem[] => {
+    const catMap = Object.fromEntries(cats.map(c => [c.id, c.name]));
+    return items.map(i => ({ ...i, category_name: catMap[i.category_id] || 'Unknown' }));
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
 
-      // Load categories (try cache first)
-      let categoriesData = cacheUtils.get<Category[]>(CACHE_KEYS.CATEGORIES);
+      // Categories
+      let categoriesData = cacheUtils.get<Pick<FoodCategory, 'id' | 'name'>[]>(CACHE_KEYS.CATEGORIES);
       if (!categoriesData) {
-        const { data, error } = await supabase
-          .from('food_categories')
-          .select('id, name')
-          .order('name');
-
-        if (error) throw error;
-        categoriesData = data || [];
+        const allCats = await fetchCategories();
+        categoriesData = allCats.map(c => ({ id: c.id, name: c.name }));
         cacheUtils.set(CACHE_KEYS.CATEGORIES, categoriesData);
       }
       setCategories(categoriesData);
 
-      // Load food items (try cache first)
+      // Food Items
       let itemsData = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS);
       if (!itemsData) {
-        const { data, error } = await supabase
-          .from('food_items')
-          .select(`
-            *,
-            food_categories (
-              name
-            )
-          `)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        itemsData = data || [];
+        itemsData = await fetchFoodItems();
         cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, itemsData);
       }
-      setFoodItems(itemsData);
-
+      setFoodItems(enrichItems(itemsData, categoriesData));
     } catch (error) {
       console.error('Error loading data:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load data",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -107,139 +84,73 @@ export const FoodItemsManagement = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!formData.name.trim() || !formData.price || !formData.category_id) {
-      toast({
-        title: "Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please fill in all required fields", variant: "destructive" });
       return;
     }
-
     try {
       const itemData = {
         name: formData.name,
         description: formData.description || null,
         price: parseFloat(formData.price),
         category_id: formData.category_id,
-        status: formData.status
+        status: formData.status,
       };
 
-      let savedItem: FoodItem | null = null;
-
       if (editingItem) {
-        const { data, error } = await supabase
-          .from('food_items')
-          .update(itemData)
-          .eq('id', editingItem.id)
-          .select(`
-            *,
-            food_categories (
-              name
-            )
-          `)
-          .single();
-
-        if (error) throw error;
-        savedItem = data;
-
-        toast({
-          title: "Success",
-          description: "Food item updated successfully",
-        });
+        await updateFoodItem(editingItem.id, itemData);
+        const updated: FoodItem = { ...editingItem, ...itemData };
+        cacheUtils.updateItem(CACHE_KEYS.FOOD_ITEMS, updated);
+        const cachedItems = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS) || [];
+        setFoodItems(enrichItems(cachedItems, categories));
+        toast({ title: "Success", description: "Food item updated successfully" });
       } else {
-        const { data, error } = await supabase
-          .from('food_items')
-          .insert(itemData)
-          .select(`
-            *,
-            food_categories (
-              name
-            )
-          `)
-          .single();
-
-        if (error) throw error;
-        savedItem = data;
-
-        toast({
-          title: "Success",
-          description: "Food item added successfully",
-        });
-      }
-
-      if (savedItem) {
-        cacheUtils.updateItem(CACHE_KEYS.FOOD_ITEMS, savedItem);
-        // Update local state directly
-        const cached = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS);
-        if (cached) setFoodItems(cached);
+        const newItem = await createFoodItem(itemData);
+        const cachedItems = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS) || [];
+        const updated = [...cachedItems, newItem];
+        cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, updated);
+        setFoodItems(enrichItems(updated, categories));
+        toast({ title: "Success", description: "Food item added successfully" });
       }
 
       setDialogOpen(false);
       setEditingItem(null);
       resetForm();
-      // loadData(); // No need to reload, we updated cache and state
     } catch (error) {
       console.error('Error saving food item:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save food item",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to save food item", variant: "destructive" });
     }
   };
 
-  const handleEdit = (item: FoodItem) => {
+  const handleEdit = (item: LocalFoodItem) => {
     setEditingItem(item);
     setFormData({
       name: item.name,
       description: item.description || "",
       price: item.price.toString(),
       category_id: item.category_id,
-      status: item.status as "available" | "unavailable"
+      status: item.status,
     });
     setDialogOpen(true);
   };
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
-
     try {
-      const { error } = await supabase
-        .from('food_items')
-        .delete()
-        .eq('id', itemToDelete);
-
-      if (error) {
-        // Check if it's a foreign key constraint error
-        if ((error as any).code === '23503') {
-          // Show fallback dialog to mark as unavailable
-          setDeleteDialogOpen(false);
-          setFkDialogOpen(true);
-          return;
-        }
-        throw error;
-      }
-
-      // Update Cache and State
+      await deleteFoodItem(itemToDelete);
       cacheUtils.removeItem(CACHE_KEYS.FOOD_ITEMS, itemToDelete);
       setFoodItems(prev => prev.filter(i => i.id !== itemToDelete));
-
-      toast({
-        title: "Success",
-        description: "Food item deleted successfully",
-      });
-      setDeleteDialogOpen(false);
-      setItemToDelete(null);
-      // loadData(); // No need to reload logic
-    } catch (error) {
+      toast({ title: "Success", description: "Food item deleted successfully" });
+    } catch (error: any) {
+      // FK violation – offer to mark unavailable
+      if (String(error?.message || '').includes('23503') || String(error?.code || '').includes('23503')) {
+        setDeleteDialogOpen(false);
+        setFkDialogOpen(true);
+        return;
+      }
       console.error('Error deleting food item:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete food item",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to delete food item", variant: "destructive" });
+    } finally {
       setDeleteDialogOpen(false);
       setItemToDelete(null);
     }
@@ -253,88 +164,39 @@ export const FoodItemsManagement = () => {
   const markUnavailable = async () => {
     if (!itemToDelete) return;
     try {
-      const { error } = await supabase
-        .from('food_items')
-        .update({ status: 'unavailable' })
-        .eq('id', itemToDelete);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Marked as Unavailable',
-        description: 'The item is now hidden from new orders.',
-      });
+      await updateFoodItem(itemToDelete, { status: 'unavailable' });
+      const items = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS) || [];
+      const updated = items.map(i => i.id === itemToDelete ? { ...i, status: 'unavailable' as const } : i);
+      cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, updated);
+      setFoodItems(enrichItems(updated, categories));
+      toast({ title: 'Marked as Unavailable', description: 'The item is now hidden from new orders.' });
     } catch (error) {
       console.error('Error marking item unavailable:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to mark item as unavailable',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to mark item as unavailable', variant: 'destructive' });
     } finally {
       setFkDialogOpen(false);
       setItemToDelete(null);
-
-      // We need to reflect this status change in cache/state
-      if (itemToDelete) {
-        // Manually update cache for efficiency since we know what changed
-        const items = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS);
-        if (items) {
-          const idx = items.findIndex(i => i.id === itemToDelete);
-          if (idx !== -1) {
-            items[idx].status = 'unavailable';
-            cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, items);
-            setFoodItems(items);
-          }
-        }
-      }
     }
   };
 
   const toggleAvailability = async (itemId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'available' ? 'unavailable' as const : 'available' as const;
     try {
-      const newStatus = currentStatus === 'available' ? 'unavailable' : 'available';
-      const { error } = await supabase
-        .from('food_items')
-        .update({ status: newStatus })
-        .eq('id', itemId);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Status Updated',
-        description: `Item marked as ${newStatus}`,
-      });
-
-      // Update Cache and State
-      const items = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS);
-      if (items) {
-        const idx = items.findIndex(i => i.id === itemId);
-        if (idx !== -1) {
-          items[idx].status = newStatus;
-          cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, items);
-          setFoodItems(items);
-        }
-      }
+      await updateFoodItem(itemId, { status: newStatus });
+      const items = cacheUtils.get<FoodItem[]>(CACHE_KEYS.FOOD_ITEMS) || [];
+      const updated = items.map(i => i.id === itemId ? { ...i, status: newStatus } : i);
+      cacheUtils.set(CACHE_KEYS.FOOD_ITEMS, updated);
+      setFoodItems(enrichItems(updated, categories));
+      toast({ title: 'Status Updated', description: `Item marked as ${newStatus}` });
     } catch (error) {
       console.error('Error toggling availability:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update item status',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to update item status', variant: 'destructive' });
     }
   };
 
   const resetForm = () => {
     setEditingItem(null);
-    setFormData({
-      name: "",
-      description: "",
-      price: "",
-      category_id: "",
-      status: "available" as "available" | "unavailable"
-    });
+    setFormData({ name: "", description: "", price: "", category_id: "", status: "available" });
   };
 
   const filteredItems = foodItems.filter(item => {
@@ -352,10 +214,7 @@ export const FoodItemsManagement = () => {
             <p className="text-gray-900 text-sm mt-1">Manage your restaurant's food menu items</p>
           </div>
           <div className="flex gap-2">
-            <Dialog open={dialogOpen} onOpenChange={(open) => {
-              setDialogOpen(open);
-              if (!open) resetForm();
-            }}>
+            <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
               <DialogTrigger asChild>
                 <Button className="bg-restaurant-blue hover:bg-restaurant-blue-hover">
                   <Plus className="w-4 h-4 mr-2" />
@@ -364,59 +223,32 @@ export const FoodItemsManagement = () => {
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>
-                    {editingItem ? 'Edit Food Item' : 'Add New Food Item'}
-                  </DialogTitle>
+                  <DialogTitle>{editingItem ? 'Edit Food Item' : 'Add New Food Item'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="text-sm font-medium text-gray-900">Item Name</label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Enter item name"
-                      required
-                    />
+                    <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Enter item name" required />
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-900">Category</label>
-                    <Select
-                      value={formData.category_id}
-                      onValueChange={(value) => setFormData({ ...formData, category_id: value })}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
+                    <Select value={formData.category_id} onValueChange={(value) => setFormData({ ...formData, category_id: value })}>
+                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                       <SelectContent>
                         {categories.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
-                          </SelectItem>
+                          <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-900">Price (₹)</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      placeholder="Enter price"
-                      required
-                    />
+                    <Input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} placeholder="Enter price" required />
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-900">Status</label>
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) => setFormData({ ...formData, status: value as "available" | "unavailable" })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value as "available" | "unavailable" })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="available">Available</SelectItem>
                         <SelectItem value="unavailable">Unavailable</SelectItem>
@@ -425,24 +257,13 @@ export const FoodItemsManagement = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-900">Description (Optional)</label>
-                    <Textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="Enter item description"
-                      rows={3}
-                    />
+                    <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Enter item description" rows={3} />
                   </div>
                   <div className="flex gap-2">
                     <Button type="submit" className="bg-restaurant-blue hover:bg-restaurant-blue-hover">
                       {editingItem ? 'Update' : 'Add'} Item
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setDialogOpen(false)}
-                    >
-                      Cancel
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
                   </div>
                 </form>
               </DialogContent>
@@ -450,16 +271,10 @@ export const FoodItemsManagement = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Search and Filter */}
           <div className="flex gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search food items..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+              <Input placeholder="Search food items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
             </div>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger className="w-48">
@@ -469,18 +284,14 @@ export const FoodItemsManagement = () => {
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
                 {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
+                  <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
           {loading ? (
-            <div className="text-center py-8">
-              <div className="text-gray-600">Loading food items...</div>
-            </div>
+            <div className="text-center py-8"><div className="text-gray-600">Loading food items...</div></div>
           ) : filteredItems.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-gray-600">
@@ -501,50 +312,28 @@ export const FoodItemsManagement = () => {
               <TableBody>
                 {filteredItems.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium text-gray-900">
-                      {item.name}
-                    </TableCell>
+                    <TableCell className="font-medium text-gray-900">{item.name}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="bg-restaurant-blue/10 text-restaurant-blue border-restaurant-blue/20">
-                        {item.food_categories?.name || 'Unknown'}
+                        {item.category_name || 'Unknown'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-medium text-green-600">
-                      ₹{item.price.toFixed(2)}
-                    </TableCell>
+                    <TableCell className="font-medium text-green-600">₹{item.price.toFixed(2)}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={item.status === 'available' ? 'default' : 'secondary'}
-                        className={item.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}
-                      >
+                      <Badge variant={item.status === 'available' ? 'default' : 'secondary'}
+                        className={item.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                         {item.status === 'available' ? 'Available' : 'Unavailable'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEdit(item)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleEdit(item)}><Edit className="w-4 h-4" /></Button>
                         {item.status === 'unavailable' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => toggleAvailability(item.id, item.status)}
-                            className="text-green-600 hover:text-green-700"
-                          >
+                          <Button size="sm" variant="outline" onClick={() => toggleAvailability(item.id, item.status)} className="text-green-600 hover:text-green-700">
                             Make Available
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteClick(item.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
+                        <Button size="sm" variant="outline" onClick={() => handleDeleteClick(item.id)} className="text-red-600 hover:text-red-700">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -557,51 +346,28 @@ export const FoodItemsManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the food item from your menu.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This action cannot be undone. This will permanently delete the food item from your menu.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setDeleteDialogOpen(false);
-              setItemToDelete(null);
-            }}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Delete
-            </AlertDialogAction>
+            <AlertDialogCancel onClick={() => { setDeleteDialogOpen(false); setItemToDelete(null); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* FK Fallback Dialog */}
       <AlertDialog open={fkDialogOpen} onOpenChange={setFkDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Item cannot be deleted</AlertDialogTitle>
-            <AlertDialogDescription>
-              This item has been used in previous bills and cannot be removed. You can mark it as unavailable so it no longer appears for new orders.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This item has been used in previous bills and cannot be removed. You can mark it as unavailable so it no longer appears for new orders.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setFkDialogOpen(false);
-              setItemToDelete(null);
-            }}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={markUnavailable}>
-              Mark as unavailable
-            </AlertDialogAction>
+            <AlertDialogCancel onClick={() => { setFkDialogOpen(false); setItemToDelete(null); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={markUnavailable}>Mark as unavailable</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

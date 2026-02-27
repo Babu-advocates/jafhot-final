@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { BarChart3, DollarSign, ShoppingCart, Users, Clock, AlertCircle, TrendingUp } from "lucide-react";
 import type { UserRole } from "@/hooks/useAuth";
 import { useDashboardData } from "@/hooks/useDashboardData";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { playNotificationSound } from "@/utils/notificationSound";
+import { fetchActiveBills, updateBill } from "@/lib/api";
 interface DashboardContentProps {
   userRole: UserRole;
 }
@@ -100,67 +100,43 @@ const KitchenDashboard = () => {
   const [loading, setLoading] = useState(true);
   const previousOrderCountRef = useRef<number>(0);
   useEffect(() => {
-    fetchActiveOrders();
+    fetchActiveOrders(true);
 
-    // Set up real-time subscription for active orders
-    const channel = supabase.channel('active-orders').on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'bills'
-    }, (payload) => {
-      console.log('Real-time update received:', payload);
+    // Replace real-time subscription with polling
+    const interval = setInterval(async () => {
+      await fetchActiveOrders(false);
+    }, 5000); // Poll every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchActiveOrders = async (initialLoad = true) => {
+    try {
+      const data = await fetchActiveBills();
       
-      // Play notification sound only for INSERT events (new orders)
-      if (payload.eventType === 'INSERT' && payload.new?.status === 'active') {
+      // Check for new orders to play sound
+      if (!initialLoad && data.length > previousOrderCountRef.current) {
+        // Find newest order (last in array since ordered by created_at asc)
+        const newestOrder = data[data.length - 1];
         console.log('New active order detected, playing notification sound');
         playNotificationSound();
         toast({
           title: "New Order Received!",
-          description: `Order #${payload.new.mobile_last_digit || 'N/A'}`,
+          description: `Order #${newestOrder.mobile_last_digit || 'N/A'}`,
         });
       }
       
-      fetchActiveOrders();
-    }).subscribe();
-    
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-  const fetchActiveOrders = async () => {
-    try {
-      const {
-        data,
-        error
-      } = await supabase.from('bills').select(`
-          *,
-          bill_items (
-            id,
-            food_item_id,
-            food_item_name,
-            price,
-            quantity,
-            total
-          )
-        `).eq('status', 'active').order('created_at', {
-        ascending: true
-      });
-      if (error) throw error;
-      setActiveOrders(data || []);
+      setActiveOrders(data);
+      previousOrderCountRef.current = data.length;
     } catch (error) {
       console.error('Error fetching active orders:', error);
     } finally {
-      setLoading(false);
+      if (initialLoad) setLoading(false);
     }
   };
   const markOrderComplete = async (orderId: string) => {
     try {
-      const {
-        error
-      } = await supabase.from('bills').update({
-        status: 'draft'
-      }).eq('id', orderId);
-      if (error) throw error;
+      await updateBill(orderId, { status: 'draft' });
       toast({
         title: "Order completed",
         description: "Order sent to biller as draft"

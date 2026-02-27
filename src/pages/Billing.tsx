@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Plus, Edit, Trash2, Save, Search, Printer, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { FoodItemSelection } from "@/components/FoodItemSelection";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchDraftBills, createBill, updateBill, deleteBill, replaceBillItems, insertBillItems, deleteBillItems } from "@/lib/api";
 import { printBill as printBillUtil } from "@/utils/billPrint";
 
 interface BillItem {
@@ -72,32 +72,12 @@ const NewBilling = () => {
   useEffect(() => {
     fetchDrafts();
     
-    // Set up real-time subscription for drafts and bill items
-    const channel = supabase
-      .channel('draft-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bills'
-        },
-        () => fetchDrafts()
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bill_items'
-        },
-        () => fetchDrafts()
-      )
-      .subscribe();
+    // Set up polling for drafts and bill items
+    const interval = setInterval(() => {
+      fetchDrafts();
+    }, 5000);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -124,24 +104,8 @@ const NewBilling = () => {
 
   const fetchDrafts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bills')
-        .select(`
-          *,
-          bill_items (
-            id,
-            food_item_id,
-            food_item_name,
-            price,
-            quantity,
-            total
-          )
-        `)
-        .eq('status', 'draft')
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-      setDrafts(data || []);
+      const data = await fetchDraftBills();
+      setDrafts(data as any[]);
     } catch (error) {
       console.error('Error fetching drafts:', error);
       toast({
@@ -204,34 +168,21 @@ const NewBilling = () => {
           // Create new active order with only the differences
           const diffTotal = diffItems.reduce((sum, item) => sum + item.total, 0);
           
-          const { data: billData, error: billError } = await supabase
-            .from('bills')
-            .insert({
+          await createBill(
+            {
               customer_name: currentBill.customer_name || null,
               mobile_last_digit: currentBill.mobile_last_digit + " (Additional)",
               total: diffTotal,
               status: 'active', // Send differences to kitchen
-            })
-            .select()
-            .single();
-
-          if (billError) throw billError;
-
-          // Insert only the difference items
-          const { error: itemsError } = await supabase
-            .from('bill_items')
-            .insert(
-              diffItems.map(item => ({
-                bill_id: billData.id,
-                food_item_id: item.food_item_id,
-                food_item_name: item.food_item_name,
-                price: item.price,
-                quantity: item.quantity,
-                total: item.total,
-              }))
-            );
-
-          if (itemsError) throw itemsError;
+            },
+            diffItems.map(item => ({
+              food_item_id: item.food_item_id,
+              food_item_name: item.food_item_name,
+              price: item.price,
+              quantity: item.quantity,
+              total: item.total,
+            }))
+          );
 
           toast({
             title: "Additional items sent to kitchen",
@@ -241,39 +192,26 @@ const NewBilling = () => {
 
         if (diffItems.length === 0) {
           // Update the original draft with all current items (no additional items to send)
-          const { error: billError } = await supabase
-            .from('bills')
-            .update({
-              customer_name: currentBill.customer_name || null,
-              mobile_last_digit: currentBill.mobile_last_digit,
-              total: currentBill.total,
-            })
-            .eq('id', editingDraft.id);
+          await updateBill(editingDraft.id, {
+            customer_name: currentBill.customer_name || null,
+            mobile_last_digit: currentBill.mobile_last_digit,
+            total: currentBill.total,
+          });
 
-          if (billError) throw billError;
-
-          // Delete existing bill items
-          await supabase
-            .from('bill_items')
-            .delete()
-            .eq('bill_id', editingDraft.id);
-
-          // Insert all current bill items
+          // Replace existing bill items using our helper
           if (currentBill.items.length > 0) {
-            const { error: itemsError } = await supabase
-              .from('bill_items')
-              .insert(
-                currentBill.items.map(item => ({
-                  bill_id: editingDraft.id,
-                  food_item_id: item.food_item_id,
-                  food_item_name: item.food_item_name,
-                  price: item.price,
-                  quantity: item.quantity,
-                  total: item.total,
-                }))
-              );
-
-            if (itemsError) throw itemsError;
+            await replaceBillItems(
+              editingDraft.id,
+              currentBill.items.map(item => ({
+                food_item_id: item.food_item_id,
+                food_item_name: item.food_item_name,
+                price: item.price,
+                quantity: item.quantity,
+                total: item.total,
+              }))
+            );
+          } else {
+             await deleteBillItems(editingDraft.id);
           }
 
           toast({
@@ -283,36 +221,21 @@ const NewBilling = () => {
         }
       } else {
         // Create new order for kitchen
-        const { data: billData, error: billError } = await supabase
-          .from('bills')
-          .insert({
+        await createBill(
+          {
             customer_name: currentBill.customer_name || null,
             mobile_last_digit: currentBill.mobile_last_digit,
             total: currentBill.total,
             status: 'active', // Send to kitchen as active order
-          })
-          .select()
-          .single();
-
-        if (billError) throw billError;
-
-        // Insert bill items
-        if (currentBill.items.length > 0) {
-          const { error: itemsError } = await supabase
-            .from('bill_items')
-            .insert(
-              currentBill.items.map(item => ({
-                bill_id: billData.id,
-                food_item_id: item.food_item_id,
-                food_item_name: item.food_item_name,
-                price: item.price,
-                quantity: item.quantity,
-                total: item.total,
-              }))
-            );
-
-          if (itemsError) throw itemsError;
-        }
+          },
+          currentBill.items.map(item => ({
+            food_item_id: item.food_item_id,
+            food_item_name: item.food_item_name,
+            price: item.price,
+            quantity: item.quantity,
+            total: item.total,
+          }))
+        );
 
         toast({
           title: "Order sent to kitchen",
@@ -465,72 +388,44 @@ const NewBilling = () => {
     try {
       if (editingDraft) {
         // Update existing draft
-        const { error: billError } = await supabase
-          .from('bills')
-          .update({
-            customer_name: currentBill.customer_name || null,
-            mobile_last_digit: currentBill.mobile_last_digit,
-            total: currentBill.total,
-          })
-          .eq('id', editingDraft.id);
+        await updateBill(editingDraft.id, {
+          customer_name: currentBill.customer_name || null,
+          mobile_last_digit: currentBill.mobile_last_digit,
+          total: currentBill.total,
+        });
 
-        if (billError) throw billError;
-
-        // Delete existing bill items
-        await supabase
-          .from('bill_items')
-          .delete()
-          .eq('bill_id', editingDraft.id);
-
-        // Insert new bill items
+        // Replace new bill items
         if (currentBill.items.length > 0) {
-          const { error: itemsError } = await supabase
-            .from('bill_items')
-            .insert(
-              currentBill.items.map(item => ({
-                bill_id: editingDraft.id,
-                food_item_id: item.food_item_id,
-                food_item_name: item.food_item_name,
-                price: item.price,
-                quantity: item.quantity,
-                total: item.total,
-              }))
-            );
-
-          if (itemsError) throw itemsError;
+          await replaceBillItems(
+            editingDraft.id,
+            currentBill.items.map(item => ({
+              food_item_id: item.food_item_id,
+              food_item_name: item.food_item_name,
+              price: item.price,
+              quantity: item.quantity,
+              total: item.total,
+            }))
+          );
+        } else {
+          await deleteBillItems(editingDraft.id);
         }
       } else {
         // Create new draft bill
-        const { data: billData, error: billError } = await supabase
-          .from('bills')
-          .insert({
+        await createBill(
+          {
             customer_name: currentBill.customer_name || null,
             mobile_last_digit: currentBill.mobile_last_digit,
             total: currentBill.total,
             status: 'draft', // Save as draft when printing
-          })
-          .select()
-          .single();
-
-        if (billError) throw billError;
-
-        // Insert bill items
-        if (currentBill.items.length > 0) {
-          const { error: itemsError } = await supabase
-            .from('bill_items')
-            .insert(
-              currentBill.items.map(item => ({
-                bill_id: billData.id,
-                food_item_id: item.food_item_id,
-                food_item_name: item.food_item_name,
-                price: item.price,
-                quantity: item.quantity,
-                total: item.total,
-              }))
-            );
-
-          if (itemsError) throw itemsError;
-        }
+          },
+          currentBill.items.map(item => ({
+            food_item_id: item.food_item_id,
+            food_item_name: item.food_item_name,
+            price: item.price,
+            quantity: item.quantity,
+            total: item.total,
+          }))
+        );
       }
 
       // Print the bill without amounts (just items and quantities)
@@ -644,41 +539,28 @@ const NewBilling = () => {
 
     try {
       // Update the bill with all modifications
-      const { error: billError } = await supabase
-        .from('bills')
-        .update({
-          customer_name: viewingDraft.customer_name || null,
-          mobile_last_digit: viewingDraft.mobile_last_digit,
-          total: viewingDraft.total,
-          status: 'completed',
-          payment_mode: selectedPaymentMode
-        })
-        .eq('id', viewingDraft.id);
+      await updateBill(viewingDraft.id, {
+        customer_name: viewingDraft.customer_name || null,
+        mobile_last_digit: viewingDraft.mobile_last_digit,
+        total: viewingDraft.total,
+        status: 'completed',
+        payment_mode: selectedPaymentMode
+      });
 
-      if (billError) throw billError;
-
-      // Delete existing bill items
-      await supabase
-        .from('bill_items')
-        .delete()
-        .eq('bill_id', viewingDraft.id);
-
-      // Insert updated bill items
+      // Replace updated bill items
       if (viewingDraft.bill_items.length > 0) {
-        const { error: itemsError } = await supabase
-          .from('bill_items')
-          .insert(
-            viewingDraft.bill_items.map(item => ({
-              bill_id: viewingDraft.id,
-              food_item_id: item.food_item_id,
-              food_item_name: item.food_item_name,
-              price: item.price,
-              quantity: item.quantity,
-              total: item.total,
-            }))
-          );
-
-        if (itemsError) throw itemsError;
+        await replaceBillItems(
+          viewingDraft.id,
+          viewingDraft.bill_items.map(item => ({
+            food_item_id: item.food_item_id,
+            food_item_name: item.food_item_name,
+            price: item.price,
+            quantity: item.quantity,
+            total: item.total,
+          }))
+        );
+      } else {
+        await deleteBillItems(viewingDraft.id);
       }
 
       // Print the bill with amounts and payment mode
@@ -712,12 +594,7 @@ const NewBilling = () => {
 
   const deleteDraft = async (draftId: string) => {
     try {
-      const { error } = await supabase
-        .from('bills')
-        .delete()
-        .eq('id', draftId);
-
-      if (error) throw error;
+      await deleteBill(draftId);
 
       toast({
         title: "Draft deleted",

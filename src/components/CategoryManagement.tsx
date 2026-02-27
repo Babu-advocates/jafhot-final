@@ -6,16 +6,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Edit, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cacheUtils, CACHE_KEYS } from "@/utils/cacheUtils";
+import { fetchCategories, createCategory, updateCategory, deleteCategory, type FoodCategory } from "@/lib/api";
 
-interface Category {
-  id: string;
-  name: string;
-  description: string | null;
-  created_at: string;
-}
+type Category = FoodCategory;
 
 export const CategoryManagement = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -43,16 +38,11 @@ export const CategoryManagement = () => {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('food_categories')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const data = await fetchCategories();
 
-      if (error) throw error;
-
-      const categoriesData = data || [];
+      const categoriesData: FoodCategory[] = data || [];
       setCategories(categoriesData);
-      cacheUtils.set(CACHE_KEYS.CATEGORIES, categoriesData);
+      cacheUtils.set(CACHE_KEYS.CATEGORIES, categoriesData.map(c => ({ id: c.id, name: c.name })));
 
     } catch (error) {
       console.error('Error loading categories:', error);
@@ -80,48 +70,17 @@ export const CategoryManagement = () => {
 
     try {
       if (editingCategory) {
-        const { data, error } = await supabase
-          .from('food_categories')
-          .update({
-            name: formData.name,
-            description: formData.description || null
-          })
-          .eq('id', editingCategory.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        // Update Cache
-        if (data) {
-          cacheUtils.updateItem(CACHE_KEYS.CATEGORIES, data);
-        }
+        await updateCategory(editingCategory.id, { name: formData.name, description: formData.description || null });
+        cacheUtils.updateItem(CACHE_KEYS.CATEGORIES, { id: editingCategory.id, name: formData.name });
 
         toast({
           title: "Success",
           description: "Category updated successfully",
         });
       } else {
-        const { data, error } = await supabase
-          .from('food_categories')
-          .insert({
-            name: formData.name,
-            description: formData.description || null
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        // Update Cache
-        if (data) {
-          cacheUtils.updateItem(CACHE_KEYS.CATEGORIES, data);
-        }
-
-        toast({
-          title: "Success",
-          description: "Category added successfully",
-        });
+        const newCat = await createCategory(formData.name, formData.description || undefined);
+        cacheUtils.updateItem(CACHE_KEYS.CATEGORIES, { id: newCat.id, name: newCat.name });
+        toast({ title: "Success", description: "Category added successfully" });
       }
 
       setDialogOpen(false);
@@ -157,12 +116,9 @@ export const CategoryManagement = () => {
     if (!confirm('Are you sure you want to delete this category?')) return;
 
     try {
-      const { error } = await supabase
-        .from('food_categories')
-        .delete()
-        .eq('id', id);
+      await deleteCategory(id);
 
-      if (error) throw error;
+
 
       // Update Cache
       cacheUtils.removeItem(CACHE_KEYS.CATEGORIES, id);

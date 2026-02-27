@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { Eye, EyeOff, Mail, Lock, User } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { signUpUser } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import type { UserRole } from "@/hooks/useAuth";
 
@@ -24,40 +24,20 @@ export const SignUpForm = ({ role, onSignUpSuccess, isTransitioning }: SignUpFor
     setIsLoading(true);
     
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            role: role,
-            full_name: fullName,
-          }
-        }
-      });
-
-      if (error) {
-        console.error('Sign up error:', error);
-        toast({
-          title: "Sign Up Failed",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (data.user) {
+      const user = await signUpUser(email, password, fullName, role);
+      
+      if (user) {
         toast({
           title: "Account Created!",
-          description: "Please check your email to verify your account.",
+          description: "You can now log in with your credentials.",
         });
         onSignUpSuccess();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign up error:', error);
       toast({
-        title: "Sign Up Error",
-        description: "An unexpected error occurred during sign up",
+        title: "Sign Up Failed",
+        description: error.message || "An unexpected error occurred during sign up",
         variant: "destructive",
       });
     } finally {

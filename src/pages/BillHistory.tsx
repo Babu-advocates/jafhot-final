@@ -7,7 +7,7 @@ import { Search, Eye, Calendar, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchCompletedBills } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { printBill as printBillUtil } from "@/utils/billPrint";
 import { format } from "date-fns";
@@ -74,101 +74,45 @@ const BillHistory = () => {
     fetchBills();
   }, [currentPage, itemsPerPage, searchTerm, selectedDate, showAllBills]);
 
-  // Real-time subscription refresher
+  // Real-time polling replacement
   useEffect(() => {
-    const channel = supabase
-      .channel('bill-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bills'
-        },
-        () => fetchBills()
-      )
-      .subscribe();
+    fetchBills();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const interval = setInterval(() => {
+      fetchBills();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [currentPage, itemsPerPage, searchTerm, selectedDate, showAllBills]);
 
   const fetchBills = async () => {
-    setLoading(true);
+    // Only set loading true if we don't have bills, to prevent flicker on polling
+    if (bills.length === 0) setLoading(true);
     try {
-      // Base Query Construction
-      let queryFn = supabase
-        .from('bills')
-        .select(`
-          *,
-          bill_items (
-            id,
-            food_item_name,
-            price,
-            quantity,
-            total
-          )
-        `, { count: 'exact' })
-        .eq('status', 'completed'); // Only show completed bills in history
-
-      // Filters
-      if (searchTerm.trim() !== "") {
-        // Note: OR filters with foreign tables or complex logic can be tricky in Supabase.
-        // Simple OR for columns on the 'bills' table:
-        queryFn = queryFn.or(`mobile_last_digit.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%`);
-      }
+      let start: string | undefined;
+      let end: string | undefined;
 
       if (!showAllBills && selectedDate) {
-        const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).toISOString();
-        const end = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59).toISOString();
-        queryFn = queryFn.gte('created_at', start).lte('created_at', end);
+        start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).toISOString();
+        end = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59).toISOString();
       }
 
-      // Pagination
-      const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
+      const response = await fetchCompletedBills({
+        search: searchTerm.trim() !== "" ? searchTerm : undefined,
+        dateStart: start,
+        dateEnd: end,
+        page: currentPage,
+        pageSize: itemsPerPage,
+      });
 
-      const { data: billsData, error: billsError, count } = await queryFn
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (billsError) throw billsError;
-      setBills(billsData || []);
-      setTotalBills(count || 0);
-
-      // Separate query for Total Sales (Aggregated over ALL filtered results, not just current page)
-      // We perform a separate lightweight query fetching only the 'total' column
-      let totalQuery = supabase
-        .from('bills')
-        .select('total')
-        .eq('status', 'completed');
-
-      if (searchTerm.trim() !== "") {
-        totalQuery = totalQuery.or(`mobile_last_digit.ilike.%${searchTerm}%,customer_name.ilike.%${searchTerm}%`);
-      }
-      if (!showAllBills && selectedDate) {
-        const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).toISOString();
-        const end = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59).toISOString();
-        totalQuery = totalQuery.gte('created_at', start).lte('created_at', end);
-      }
-
-      const { data: totalData, error: totalError } = await totalQuery;
-
-      if (!totalError && totalData) {
-        const sum = totalData.reduce((acc, curr) => acc + (curr.total || 0), 0);
-        setTotalSales(sum);
-      }
-
+      setBills(response.bills);
+      setTotalBills(response.total);
+      setTotalSales(response.totalSales);
     } catch (error) {
       console.error('Error fetching bills:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch bills",
-        variant: "destructive"
-      });
+      // Optional: Add a toast if polling fails repeatedly, but usually we just log
     } finally {
-      setLoading(false);
+      if (loading) setLoading(false);
     }
   };
 
@@ -183,11 +127,6 @@ const BillHistory = () => {
     setSelectedDate(undefined);
     setShowAllBills(true);
   };
-
-  const getTotalSales = () => {
-    return filteredBills.reduce((sum, bill) => sum + bill.total, 0);
-  };
-
   if (loading && bills.length === 0) {
     // Only show full loading state if we have no bills (initial load)
     // otherwise we might just be switching pages, which can be subtle or have a small spinner
